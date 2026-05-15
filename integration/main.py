@@ -1,3 +1,4 @@
+import safety_car
 import asyncio
 import json
 import random
