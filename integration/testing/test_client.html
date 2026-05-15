@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Telemetry Test</title>
+    <style>
+        body { font-family: monospace; background-color: #1e1e1e; color: #00ff00; padding: 20px; }
+        .dashboard { border: 1px solid #00ff00; padding: 20px; max-width: 400px; }
+    </style>
+</head>
+<body>
+    <h2>Live Race Telemetry</h2>
+    <div class="dashboard">
+        <p><strong>Speed:</strong> <span id="speed">0</span> km/h</p>
+        <p><strong>RPM:</strong> <span id="rpm">0</span></p>
+        <p><strong>Gear:</strong> <span id="gear">N</span></p>
+        <p><strong>Throttle:</strong> <span id="throttle">0</span>%</p>
+    </div>
+
+    <script>
+        // Connect to the FastAPI WebSocket server
+        const ws = new WebSocket("ws://localhost:8000/ws/telemetry");
+
+        ws.onmessage = function(event) {
+            // Parse the incoming JSON data
+            const data = JSON.parse(event.data);
+            
+            // Update the HTML elements with live data
+            document.getElementById("speed").innerText = data.speed_kmh;
+            document.getElementById("rpm").innerText = data.engine_rpm;
+            document.getElementById("gear").innerText = data.gear;
+            document.getElementById("throttle").innerText = data.throttle_percent;
+        };
+
+        ws.onopen = function() {
+            console.log("Connected to Telemetry Stream!");
+        };
+    </script>
+</body>
+</html>
