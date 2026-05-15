@@ -10,7 +10,7 @@ function App() {
 
   useEffect(() => {
     // Backend se WebSocket connect kar rahe hain
-    const ws = new WebSocket("ws://localhost:8000/ws/telemetry")
+    const ws = new WebSocket("wss://f1-strategy-simulator-p0l5.onrender.com/ws");
 
     ws.onopen = () => console.log("React UI Connected to Telemetry Stream!")
     
