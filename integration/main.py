@@ -1,13 +1,21 @@
 import asyncio
 import json
 import random
+from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 app = FastAPI(title="Race Simulator Telemetry API")
 
-# Basic health check route
-@app.get("/")
-async def root():
+# Serve frontend static assets if they exist (built Vite output)
+frontend_dist = Path(__file__).resolve().parent.parent / 'frontend' / 'dist'
+if frontend_dist.exists():
+    app.mount('/', StaticFiles(directory=str(frontend_dist), html=True), name='frontend')
+
+# Basic health check route (kept separate so static mount can serve the app at root)
+@app.get('/health')
+async def health():
     return {"status": "online", "message": "Telemetry API is running perfectly."}
 
 # Real-time WebSocket endpoint
