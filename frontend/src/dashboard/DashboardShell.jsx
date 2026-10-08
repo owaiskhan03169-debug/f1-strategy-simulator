@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import RaceCommandSidebar from './RaceCommandSidebar'
 import useTelemetryStream from '../websocket_handlers/useTelemetryStream'
+import { getAiInsightUrl, getBackendOrigin } from '../config/connection'
 
-// ── Backend URL ───────────────────────────────────────────────────────────────
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || 'https://backendserver-2eul.onrender.com'
+const BACKEND_ORIGIN = getBackendOrigin()
+const AI_INSIGHT_URL = getAiInsightUrl()
 
 const LiveTelemetryDashboard = lazy(() => import('../telemetry_panels/LiveTelemetryDashboard'))
 
@@ -25,17 +25,21 @@ async function fetchAiInsight(telemetry, tyreWear, ersBattery, lap) {
 - Fuel Remaining: ${telemetry.fuel_remaining} kg
 Give a direct, specific race engineering recommendation.`
 
-    const response = await fetch(`${BACKEND_URL}/ai-insight`, {
+    const response = await fetch(AI_INSIGHT_URL, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ prompt }),
     })
 
+    if (!response.ok) {
+      throw new Error(`AI insight request failed (${response.status} ${response.statusText})`)
+    }
+
     const data = await response.json()
     return data?.insight || null
 
   } catch (err) {
-    console.warn('Groq AI insight fetch failed:', err)
+    console.warn(`Groq AI insight fetch failed via ${AI_INSIGHT_URL}:`, err)
     return null
   }
 }
@@ -46,8 +50,6 @@ function buildSnapshot(telemetry, history, aiInsight, lapNumber) {
   const engineRpm  = telemetry.engine_rpm   ?? telemetry.engineRpm   ?? 0
   const throttle   = telemetry.throttle_percent ?? telemetry.throttlePercent ?? 0
   const ersBatt    = telemetry.ers_battery  ?? telemetry.ers          ?? 100
-  const ersDepl    = telemetry.ers_deploy   ?? telemetry.ersDeploy    ?? 0
-
   const basePace   = Math.max(84.2, 95 - speedKmh / 18)
   const sectorTime = `${Math.floor(basePace / 60)}:${(basePace % 60).toFixed(3).padStart(6, '0')}`
 
@@ -80,9 +82,9 @@ function buildSnapshot(telemetry, history, aiInsight, lapNumber) {
 }
 
 export default function DashboardShell() {
-  const { telemetry, history, connectionState } = useTelemetryStream()
+  const { telemetry, history, connectionState, connectionError, telemetryWsUrl } = useTelemetryStream()
   const [aiInsight, setAiInsight] = useState('System initializing — waiting for telemetry...')
-  const [lastAiLap, setLastAiLap] = useState(0)
+  const lastAiLapRef = useRef(0)
 
   const lapNumber  = telemetry.lap ?? Math.max(1, history.length + 1)
   const tyreWear   = telemetry.tyre_wear
@@ -93,10 +95,8 @@ export default function DashboardShell() {
   useEffect(() => {
     if (connectionState !== 'live') return
     if ((telemetry.speed_kmh ?? telemetry.speedKmh ?? 0) === 0) return
-    if (lapNumber - lastAiLap < 5 && lastAiLap !== 0) return
-
-    setLastAiLap(lapNumber)
-    setAiInsight('⚡ Analyzing telemetry with Groq AI...')
+    if (lapNumber - lastAiLapRef.current < 5 && lastAiLapRef.current !== 0) return
+    lastAiLapRef.current = lapNumber
 
     fetchAiInsight(telemetry, tyreWear, ersBattery, lapNumber).then((insight) => {
       if (insight) {
@@ -109,14 +109,19 @@ export default function DashboardShell() {
         )
       }
     })
-  }, [lapNumber, connectionState])
+  }, [connectionState, ersBattery, lapNumber, telemetry, tyreWear])
 
   const snapshot = buildSnapshot(telemetry, history, aiInsight, lapNumber)
 
   return (
     <div className="min-h-screen bg-carbon-950 text-slate-100">
       <div className="grid min-h-screen grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <RaceCommandSidebar connectionState={connectionState} />
+        <RaceCommandSidebar
+          connectionState={connectionState}
+          telemetryWsUrl={telemetryWsUrl}
+          backendOrigin={BACKEND_ORIGIN}
+          connectionError={connectionError}
+        />
 
         <main className="flex min-h-screen flex-col bg-shell-gradient px-4 py-4 sm:px-6 lg:px-8">
           <header className="mb-5 flex flex-col gap-4 rounded-2xl border border-carbon-700 bg-carbon-850/80 px-5 py-4 shadow-panel shadow-black/20 md:flex-row md:items-center md:justify-between">
