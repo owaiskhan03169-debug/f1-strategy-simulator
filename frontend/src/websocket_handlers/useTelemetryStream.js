@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { getTelemetryWsUrl } from '../config/connection'
 
-const TELEMETRY_WS_URL = import.meta.env.VITE_TELEMETRY_WS_URL || 'wss://backendserver-production-d286.up.railway.app/ws'
+const TELEMETRY_WS_URL = getTelemetryWsUrl()
 
 const FALLBACK_TELEMETRY = {
   speedKmh: 0,
@@ -53,6 +54,7 @@ export default function useTelemetryStream() {
   const [telemetry,       setTelemetry]       = useState(FALLBACK_TELEMETRY)
   const [connectionState, setConnectionState] = useState('offline')
   const [history,         setHistory]         = useState(FALLBACK_HISTORY)
+  const [connectionError, setConnectionError] = useState(null)
 
   const wsRef     = useRef(null)
   const retryRef  = useRef(null)
@@ -62,12 +64,14 @@ export default function useTelemetryStream() {
     if (cancelRef.current) return
 
     try {
+      setConnectionState('connecting')
       const ws = new WebSocket(TELEMETRY_WS_URL)
       wsRef.current = ws
 
       ws.onopen = () => {
         if (!cancelRef.current) {
           setConnectionState('live')
+          setConnectionError(null)
           if (retryRef.current) {
             clearTimeout(retryRef.current)
             retryRef.current = null
@@ -81,6 +85,7 @@ export default function useTelemetryStream() {
 
           // Race finished — silently reconnect, no status flicker
           if (parsed.status === 'RACE_FINISHED') {
+            setConnectionState('finished')
             retryRef.current = setTimeout(() => {
               if (!cancelRef.current) connect()
             }, 3000)
@@ -103,18 +108,28 @@ export default function useTelemetryStream() {
       }
 
       ws.onerror = () => {
-        // ignore — onclose will handle reconnect
+        if (!cancelRef.current) {
+          const message = `Telemetry WebSocket error at ${TELEMETRY_WS_URL}`
+          setConnectionError(message)
+          console.error(message)
+        }
       }
 
       ws.onclose = () => {
         if (!cancelRef.current) {
-          // NO status change — no flickering!
+          setConnectionState('offline')
+          const message = `Telemetry WebSocket disconnected from ${TELEMETRY_WS_URL}. Retrying in 2s.`
+          setConnectionError(message)
+          console.warn(message)
           retryRef.current = setTimeout(() => {
             if (!cancelRef.current) connect()
           }, 2000)
         }
       }
-    } catch {
+    } catch (err) {
+      const message = `Unable to create telemetry WebSocket for ${TELEMETRY_WS_URL}: ${err?.message || 'unknown error'}`
+      setConnectionError(message)
+      console.error(message)
       retryRef.current = setTimeout(() => {
         if (!cancelRef.current) connect()
       }, 2000)
@@ -123,18 +138,18 @@ export default function useTelemetryStream() {
 
   useEffect(() => {
     cancelRef.current = false
-    setConnectionState('connecting')
     connect()
 
     return () => {
       cancelRef.current = true
       if (retryRef.current) clearTimeout(retryRef.current)
       if (wsRef.current) {
-        try { wsRef.current.close() } catch { }
+        try { wsRef.current.close() } catch {
+          // ignore cleanup close errors
+        }
       }
     }
   }, [])
 
-  return { telemetry, history, connectionState }
+  return { telemetry, history, connectionState, connectionError, telemetryWsUrl: TELEMETRY_WS_URL }
 }
-

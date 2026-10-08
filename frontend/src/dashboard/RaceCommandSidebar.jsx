@@ -1,5 +1,3 @@
-const TELEMETRY_WS_URL = import.meta.env.VITE_TELEMETRY_WS_URL || 'wss://backendserver-production-d286.up.railway.app/ws'
-
 const actions = [
   { label: 'Session mode', value: 'Practice' },
   { label: 'Fuel target', value: 'Auto' },
@@ -13,7 +11,12 @@ const controls = [
   'Telemetry notes',
 ]
 
-export default function RaceCommandSidebar({ connectionState = 'offline' }) {
+export default function RaceCommandSidebar({
+  connectionState = 'offline',
+  telemetryWsUrl = 'ws://localhost:8000/ws',
+  backendOrigin = 'http://localhost:8000',
+  connectionError = null,
+}) {
   return (
     <aside className="flex h-full flex-col gap-6 bg-carbon-900/95 p-5 text-slate-100 shadow-panel shadow-black/30">
       <div>
@@ -40,7 +43,11 @@ export default function RaceCommandSidebar({ connectionState = 'offline' }) {
             {connectionState}
           </span>
         </div>
-        <p className="mt-3 text-sm text-slate-400">WS feed: {TELEMETRY_WS_URL}</p>
+        <p className="mt-3 text-sm text-slate-400">Backend API: {backendOrigin}</p>
+        <p className="mt-1 text-sm text-slate-400">WS feed: {telemetryWsUrl}</p>
+        {connectionError && (
+          <p className="mt-2 text-xs text-pit">{connectionError}</p>
+        )}
       </div>
 
       <div className="space-y-3">

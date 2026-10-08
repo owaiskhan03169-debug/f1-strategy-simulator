@@ -14,9 +14,14 @@ from traffic          import TrafficAnalysis
 
 app = FastAPI(title="F1 Race Simulator Telemetry API")
 
+cors_origins_env = os.environ.get("CORS_ALLOW_ORIGINS", "*").strip()
+allowed_origins = ["*"] if cors_origins_env == "*" else [
+    origin.strip() for origin in cors_origins_env.split(",") if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins or ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
